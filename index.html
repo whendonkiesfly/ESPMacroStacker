@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<head>
+<title>Macro Stacker</title>
+</head>
+<body>
+<script type="text/javascript">
+  const MESSAGE_TIMEOUT_MS = 1000;
+  const SNAP_MOVE_DELAY = 300;
+
+  const STEPS_PER_MM = 54;
+
+  websocket = undefined;
+  lastMessageTXTime = 0;
+  waitingOnResponse = false;
+  currentlyMoving = false;
+  currentDirection = 0;
+  moveSnapCmdBlock = false;
+
+
+  movement_complete = true;
+
+  const DIRECTION_FORWARD = 0
+  const DIRECTION_BACKWARDS = 1
+
+
+  function sendMove(direction, distance) {
+    //distance is a value in mm.
+    // if(movement_complete) {////todo: do we need this?
+    if(true) {
+      send_cmd({"cmd": "move", "direction": direction, "dist": parseInt(distance*STEPS_PER_MM)})
+      movement_complete = false;
+    } else {
+      console.log("movement not complete");
+    }
+  }
+
+  function sendSnap() {
+    if(movement_complete == false) {
+      setTimeout(sendSnap, 200);
+    } else {
+      send_cmd({"cmd":"snap"})
+    }
+  }
+
+  function sendSetHome() {
+    send_cmd({"cmd":"set_home"})
+  }
+
+  function sendGoHome() {
+    send_cmd({"cmd":"go_home"})
+  }
+
+  function setStepperOff() {
+    send_cmd({"cmd":"stepper_off"})
+  }
+
+  function snapAndMove() {
+    if(moveSnapCmdBlock) {
+      console.log("too soon.");
+      return;
+    }
+    sendSnap();
+    moveSnapCmdBlock = true;
+    var intervalId = setInterval(function() {
+      if(!waitingOnResponse) {
+        clearInterval(intervalId);
+        setTimeout(function() {moveSnapCmdBlock=false; move();}, SNAP_MOVE_DELAY)
+      }
+    }, 10);
+  }
+
+  function move() {
+    var dist = document.getElementById("picture_dist").value;
+    sendMove(DIRECTION_FORWARD, dist);
+  }
+
+
+  function ConnectWebsocket() {
+  	// websocket = new WebSocket("ws://"+document.location.host+":80/");
+  	websocket = new WebSocket("ws://192.168.4.1:80/");///TODO: SWITCH BACK
+  	websocket.onopen = function() {
+      console.log("connected")
+  		setInterval(socketKeepAlive, 2000);
+  		// setInterval(moveManager, 200);
+  	};
+
+  	websocket.onmessage = function (evt) {
+  		console.log("got data", evt.data);///TODO: REMOVE ME!
+  		waitingOnResponse = false;
+      if(evt.data == "done") {
+        movement_complete = true;
+      }
+      if(evt.data.includes("ERROR")) {
+        alert(evt.data);
+      }
+  	};
+
+  	websocket.onclose = function(event) {
+  		alert("Lost connection to board. Refresh your page to reconnect.");
+  	};
+
+    websocket.onerror = function(event) {
+      alert("websocket error");
+    };
+  }
+
+
+  function socketKeepAlive() {
+  	//Send a blank message to keep the connection alive.
+  	if(	websocket && websocket.readyState == websocket.OPEN) {
+  		console.log("keep alive");//todo: remove me!
+  		websocket.send("");
+  	}
+  }
+
+
+  window.onload = function() {
+    console.log("hi")
+    ConnectWebsocket();
+  };
+
+
+
+  function send_cmd(cmd) {
+    //Check to see if we are ready to send.
+    var currentTime = new Date();
+
+    if(moveSnapCmdBlock) {
+      console.log("move snap command block enabled.");
+      return;
+    }
+
+    if(waitingOnResponse == true) {
+      //We are waiting on a response. Maybe we timed out.
+      if(currentTime - lastMessageTXTime > MESSAGE_TIMEOUT_MS) {
+        //We timed out.
+        console.log("Timed out waiting for ack.");
+        movement_complete = true;  // Assume we are done moving.
+      } else {
+        //No timeout yet.
+        console.log("waiting on response. too soon.")
+        return;
+      }
+    }
+
+    waitingOnResponse = true;
+    lastMessageTXTime = currentTime;
+    websocket.send(JSON.stringify(cmd));
+  }
+</script>
+
+
+
+<div>
+  <button onclick="sendMove(DIRECTION_BACKWARDS, 10)">Move Back 10</button>
+  <button onclick="sendMove(DIRECTION_BACKWARDS, 5)">Move Back 5</button>
+  <button onclick="sendMove(DIRECTION_BACKWARDS, 1)">Move Back 1</button>
+</div>
+<div>
+  <button onclick="sendMove(DIRECTION_FORWARD, 10)">Move forward 10</button>
+  <button onclick="sendMove(DIRECTION_FORWARD, 5)">Move forward 5</button>
+  <button onclick="sendMove(DIRECTION_FORWARD, 1)">Move forward 1</button>
+</div>
+
+<div>
+  <button onclick="sendSetHome()">Set Home</button>
+  <button onclick="sendGoHome()">Go Home</button>
+</div>
+
+<div>
+  <button onclick="snapAndMove()">Snap+Move</button>
+  <button onclick="sendSnap()">Snap</button>
+  <button onclick="move()">Move</button>
+  Distance: <input id="picture_dist" type="number" min=0.05 max=50 value=0.5>
+</div>
+
+<div>
+  <button onclick="setStepperOff()"> Disable Stepper</button>
+</div>
+
+</body>
