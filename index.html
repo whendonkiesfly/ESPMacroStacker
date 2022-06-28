@@ -9,6 +9,8 @@
 
   const STEPS_PER_MM = 54;
 
+  const KEEP_ALIVE_PERIOD_MS = 25 * 1000;
+
   websocket = undefined;
   lastMessageTXTime = 0;
   waitingOnResponse = false;
@@ -54,6 +56,10 @@
     send_cmd({"cmd":"stepper_off"})
   }
 
+  function setStepperOn() {
+    send_cmd({"cmd":"stepper_on"})
+  }
+
   function snapAndMove() {
     if(moveSnapCmdBlock) {
       console.log("too soon.");
@@ -76,12 +82,10 @@
 
 
   function ConnectWebsocket() {
-  	// websocket = new WebSocket("ws://"+document.location.host+":80/");
-  	websocket = new WebSocket("ws://192.168.4.1:80/");///TODO: SWITCH BACK
+  	websocket = new WebSocket("ws://"+document.location.host+":80/");
   	websocket.onopen = function() {
       console.log("connected")
-  		setInterval(socketKeepAlive, 2000);
-  		// setInterval(moveManager, 200);
+  		setInterval(socketKeepAlive, 1000);
   	};
 
   	websocket.onmessage = function (evt) {
@@ -107,15 +111,16 @@
 
   function socketKeepAlive() {
   	//Send a blank message to keep the connection alive.
-  	if(	websocket && websocket.readyState == websocket.OPEN) {
+    var currentTime = new Date();
+  	if(	websocket && (websocket.readyState == websocket.OPEN) && ((currentTime - lastMessageTXTime) > KEEP_ALIVE_PERIOD_MS)) {
   		console.log("keep alive");//todo: remove me!
+      lastMessageTXTime = currentTime;
   		websocket.send("");
   	}
   }
 
 
   window.onload = function() {
-    console.log("hi")
     ConnectWebsocket();
   };
 
@@ -175,7 +180,8 @@
 </div>
 
 <div>
-  <button onclick="setStepperOff()"> Disable Stepper</button>
+  <button onclick="setStepperOff()">Disable Stepper</button>
+  <button onclick="setStepperOn()">Enable Stepper</button>
 </div>
 
 </body>

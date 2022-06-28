@@ -1,15 +1,11 @@
--------TODO: BE ABLE TO DISABLE STEPPER
-
-
-
-tmr.delay(3000000)
+tmr.delay(1500000)
 print("starting")
 
 --Output Pins
 LED_PIN = 8
 DIRECTION_PIN = 2
 STEP_PIN = 1
-STEPPER_ENABLE_PIN = 3
+STEPPER_ENABLE_NOT_PIN = 3
 CAMERA_CAPTURE_PIN = 0
 
 
@@ -31,21 +27,15 @@ movement_conn = nil  -- Stores connection to client that command movement.
 gpio.write(LED_PIN, 1)
 gpio.write(DIRECTION_PIN, 0)
 gpio.write(STEP_PIN, 0)
-gpio.write(STEPPER_ENABLE_PIN, 1)
+gpio.write(STEPPER_ENABLE_NOT_PIN, 0)
 gpio.write(CAMERA_CAPTURE_PIN, 0)
 
 
 gpio.mode(LED_PIN, gpio.OUTPUT)
 gpio.mode(DIRECTION_PIN, gpio.OUTPUT)
 gpio.mode(STEP_PIN, gpio.OUTPUT)
-gpio.mode(STEPPER_ENABLE_PIN, gpio.OUTPUT)
+gpio.mode(STEPPER_ENABLE_NOT_PIN, gpio.OUTPUT)
 gpio.mode(CAMERA_CAPTURE_PIN, gpio.OUTPUT)
-
---gpio.mode(FRONT_ENDSTOP_PIN, gpio.INPUT)
---gpio.mode(REAR_ENDSTOP_PIN, gpio.INPUT)
-
-
-
 
 
 
@@ -55,12 +45,6 @@ wifi.setmode(wifi.SOFTAP)
 wifi.ap.config({
   ssid="MacroStacker"
 })
-
-
-
-
-
-
 
 
 
@@ -122,6 +106,10 @@ function websocketOnRxCallback(conn, message)
 end
 
 function rxCallback(conn, message)
+  if message == "" then
+    return
+  end
+
   print("Got message")
   print(message)
 
@@ -134,7 +122,7 @@ function rxCallback(conn, message)
 
   cmd_success = false
   if msg.cmd == "move" then
-    gpio.write(STEPPER_ENABLE_PIN, 1)
+    gpio.write(STEPPER_ENABLE_NOT_PIN, 0)
     if msg.dist and msg.direction then
       --print("move")
       current_direction = tonumber(msg.direction)
@@ -153,7 +141,11 @@ function rxCallback(conn, message)
     end)
 
   elseif msg.cmd == "stepper_off" then
-    gpio.write(STEPPER_ENABLE_PIN, 0)
+    gpio.write(STEPPER_ENABLE_NOT_PIN, 1)
+    cmd_success = true
+
+  elseif msg.cmd == "stepper_on" then
+    gpio.write(STEPPER_ENABLE_NOT_PIN, 0)
     cmd_success = true
 
   elseif msg.cmd == "set_home" then
@@ -161,7 +153,7 @@ function rxCallback(conn, message)
     cmd_success = true
 
   elseif msg.cmd == "go_home" then
-    gpio.write(STEPPER_ENABLE_PIN, 1)
+    gpio.write(STEPPER_ENABLE_NOT_PIN, 0)
     if current_position > 0 then
       current_direction = DIRECTION_FORWARD
     else
